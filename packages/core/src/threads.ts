@@ -42,6 +42,7 @@ export enum ContentPartType {
   Text = "text",
   ImageUrl = "image_url",
   InputAudio = "input_audio",
+  Document = "document",
   // TODO: we get back "resource" from MCP servers, but it is not supported yet
   // Resource = "resource",
 }
@@ -64,6 +65,18 @@ export type ChatCompletionContentPartInputAudio =
   OpenAI.Chat.Completions.ChatCompletionContentPartInputAudio;
 export type ChatCompletionContentPartFile =
   OpenAI.Chat.Completions.ChatCompletionContentPart.File;
+
+/**
+ * Custom content part type for uploaded documents stored in Supabase Storage
+ * This is an intermediary type that gets converted to provider-specific formats
+ */
+export type ChatCompletionContentPartDocument = {
+  type: "document";
+  document: {
+    storagePath: string;
+    mimeType: string;
+  };
+};
 
 /**
  * Represents a single content part in a chat completion message

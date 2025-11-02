@@ -36,6 +36,11 @@ export class ImageUrl {
   detail?: ImageDetail;
 }
 
+export class Document {
+  storagePath!: string;
+  mimeType!: string;
+}
+
 /** DTO for the content part of a message. This may be safely cast to or from the ChatCompletionContentPart interface. */
 @ApiSchema({ name: "ChatCompletionContentPart" })
 export class ChatCompletionContentPartDto
@@ -49,6 +54,8 @@ export class ChatCompletionContentPartDto
   image_url?: ImageUrl;
   @ValidateIf((o) => o.type === ContentPartType.InputAudio)
   input_audio?: InputAudio;
+  @ValidateIf((o) => o.type === ContentPartType.Document)
+  document?: Document;
 }
 
 @ApiSchema({ name: "ThreadMessage" })
