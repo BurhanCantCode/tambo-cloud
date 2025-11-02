@@ -4,6 +4,7 @@ import {
   Controller,
   Inject,
   Post,
+  Req,
   UploadedFile,
   UseInterceptors,
 } from "@nestjs/common";
@@ -14,20 +15,33 @@ import {
   ApiOperation,
   ApiResponse,
 } from "@nestjs/swagger";
-import pdf from "pdf-parse";
+import { Request } from "express";
 import * as aiServiceInterface from "../ai/interfaces/ai.service.interface";
+import { StorageService } from "../common/services/storage.service";
+import { extractContextInfo } from "../common/utils/extract-context-info";
 import { ExtractComponentResponseDto } from "./dto/extract-component-response.dto";
 import { ExtractComponentDto } from "./dto/extract-component.dto";
 import { ExtractPdfResponseDto } from "./dto/extract-pdf-response.dto";
 import { ExtractPdfDto } from "./dto/extract-pdf.dto";
 
+// Allowed MIME types for file uploads
+const ALLOWED_FILE_TYPES = [
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "image/jpeg",
+  "image/png",
+] as const;
+
 @Controller("extract")
 export class ExtractorController {
-  private readonly MAX_PDF_SIZE_MB = 50;
+  private readonly MAX_FILE_SIZE_MB = 50;
 
   constructor(
     @Inject("AIService")
     private aiService: aiServiceInterface.AIServiceInterface,
+    private readonly storageService: StorageService,
   ) {}
 
   @Post()
@@ -44,13 +58,13 @@ export class ExtractorController {
   @ApiConsumes("multipart/form-data")
   @ApiBody({ type: ExtractPdfDto })
   @ApiOperation({
-    summary: "Extract text from PDF",
+    summary: "Upload file to storage",
     description:
-      "Upload a PDF file and extract its text content. Maximum file size is 50MB.",
+      "Upload a file (PDF, TXT, MD, CSV, JPG, PNG) to Supabase Storage. Maximum file size is 50MB.",
   })
   @ApiResponse({
     status: 200,
-    description: "Text successfully extracted from PDF",
+    description: "File successfully uploaded",
     type: ExtractPdfResponseDto,
   })
   @ApiResponse({
@@ -58,26 +72,32 @@ export class ExtractorController {
     description: "Invalid file or format",
   })
   async extractPdfText(
+    @Req() request: Request,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ExtractPdfResponseDto> {
-    this.validatePdfFile(file);
-    const data = await pdf(file.buffer);
+    this.validateFile(file);
+    const { projectId } = extractContextInfo(request, undefined);
+    const storagePath = await this.storageService.upload(
+      projectId,
+      file.originalname,
+      file.buffer,
+      file.mimetype,
+    );
     return {
-      text: data.text,
-      pages: data.numpages,
+      storagePath,
     };
   }
 
-  private validatePdfFile(file: Express.Multer.File): void {
-    const maxSizeBytes = this.MAX_PDF_SIZE_MB * 1024 * 1024;
+  private validateFile(file: Express.Multer.File): void {
+    const maxSizeBytes = this.MAX_FILE_SIZE_MB * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       throw new BadRequestException(
-        `File too large. Maximum size is ${this.MAX_PDF_SIZE_MB}MB`,
+        `File too large. Maximum size is ${this.MAX_FILE_SIZE_MB}MB`,
       );
     }
-    if (file.mimetype !== "application/pdf") {
+    if (!ALLOWED_FILE_TYPES.includes(file.mimetype as any)) {
       throw new BadRequestException(
-        `Invalid file type: ${file.mimetype}. Expected application/pdf`,
+        `Invalid file type: ${file.mimetype}. Supported types: PDF, TXT, MD, CSV, JPG, PNG`,
       );
     }
   }

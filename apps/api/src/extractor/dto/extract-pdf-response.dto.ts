@@ -2,14 +2,8 @@ import { ApiProperty } from "@nestjs/swagger";
 
 export class ExtractPdfResponseDto {
   @ApiProperty({
-    description: "Extracted text content from the PDF",
+    description: "Storage path where the file was uploaded",
     type: "string",
   })
-  text!: string;
-
-  @ApiProperty({
-    description: "Number of pages in the PDF",
-    type: "number",
-  })
-  pages!: number;
+  storagePath!: string;
 }
