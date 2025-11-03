@@ -83,4 +83,22 @@ export class StorageService {
       throw new Error(`Failed to delete file: ${error.message}`);
     }
   }
+
+  /**
+   * Get signed URL for file (valid for 1 hour)
+   * LLM providers can fetch directly from this URL
+   * @param path - The storage path
+   * @returns Promise resolving to signed URL
+   */
+  async getSignedUrl(path: string): Promise<string> {
+    const { data, error } = await this.client.storage
+      .from(this.bucketName)
+      .createSignedUrl(path, 3600);
+
+    if (error) {
+      throw new Error(`Failed to create signed URL: ${error.message}`);
+    }
+
+    return data.signedUrl;
+  }
 }
