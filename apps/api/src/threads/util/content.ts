@@ -41,17 +41,6 @@ export function convertContentDtoToContentPart(
               format: "wav",
             },
           };
-        case ContentPartType.Document:
-          if (!part.document?.storagePath) {
-            throw new Error("Storage path is required for document type");
-          }
-          return {
-            type: ContentPartType.Document,
-            document: {
-              storagePath: part.document.storagePath,
-              mimeType: part.document.mimeType,
-            },
-          } as ChatCompletionContentPart;
         case "resource" as ContentPartType:
           // TODO: we get back "resource" from MCP servers, but it is not supported yet
           console.warn(
