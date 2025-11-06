@@ -6,6 +6,7 @@ import {
   Post,
   Req,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
@@ -14,26 +15,42 @@ import {
   ApiConsumes,
   ApiOperation,
   ApiResponse,
+  ApiSecurity,
 } from "@nestjs/swagger";
+import mimeTypes from "mime-types";
 import { Request } from "express";
 import * as aiServiceInterface from "../ai/interfaces/ai.service.interface";
 import { StorageService } from "../common/services/storage.service";
 import { extractContextInfo } from "../common/utils/extract-context-info";
+import { ApiKeyGuard } from "../projects/guards/apikey.guard";
 import { ExtractComponentResponseDto } from "./dto/extract-component-response.dto";
 import { ExtractComponentDto } from "./dto/extract-component.dto";
 import { ExtractPdfResponseDto } from "./dto/extract-pdf-response.dto";
 import { ExtractPdfDto } from "./dto/extract-pdf.dto";
 
-// Allowed MIME types for file uploads
-const ALLOWED_FILE_TYPES = [
-  "application/pdf",
-  "text/plain",
-  "text/markdown",
-  "text/csv",
+const SUPPORTED_IMAGE_TYPES = new Set([
   "image/jpeg",
+  "image/jpg",
   "image/png",
-] as const;
+  "image/gif",
+  "image/webp",
+]);
 
+const SUPPORTED_APPLICATION_TYPES = new Set([
+  "application/pdf",
+  "application/json",
+  "application/rtf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.oasis.opendocument.text",
+]);
+
+const SUPPORTED_TYPE_DESCRIPTION =
+  "PDF, text (TXT, MD, HTML, JSON, CSV, TSV, code files), Office documents (DOCX, PPTX, XLSX), RTF, ODT, and images (JPG, PNG, GIF, WEBP)";
+
+@ApiSecurity("apiKey")
+@UseGuards(ApiKeyGuard)
 @Controller("extract")
 export class ExtractorController {
   private readonly MAX_FILE_SIZE_MB = 50;
@@ -75,30 +92,54 @@ export class ExtractorController {
     @Req() request: Request,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ExtractPdfResponseDto> {
-    this.validateFile(file);
+    const mimeType = this.validateFile(file);
     const { projectId } = extractContextInfo(request, undefined);
     const storagePath = await this.storageService.upload(
       projectId,
       file.originalname,
       file.buffer,
-      file.mimetype,
+      mimeType,
     );
     return {
       storagePath,
+      mimeType,
     };
   }
 
-  private validateFile(file: Express.Multer.File): void {
+  private validateFile(file: Express.Multer.File): string {
     const maxSizeBytes = this.MAX_FILE_SIZE_MB * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       throw new BadRequestException(
         `File too large. Maximum size is ${this.MAX_FILE_SIZE_MB}MB`,
       );
     }
-    if (!ALLOWED_FILE_TYPES.includes(file.mimetype as any)) {
+    const normalizedMimeType = this.normalizeMimeType(file);
+    if (!normalizedMimeType || !this.isSupportedMimeType(normalizedMimeType)) {
+      const fallbackMimeType = file.mimetype || "unknown";
       throw new BadRequestException(
-        `Invalid file type: ${file.mimetype}. Supported types: PDF, TXT, MD, CSV, JPG, PNG`,
+        `Invalid file type: ${
+          normalizedMimeType ?? fallbackMimeType
+        }. Supported types: ${SUPPORTED_TYPE_DESCRIPTION}`,
       );
     }
+    return normalizedMimeType;
+  }
+
+  private normalizeMimeType(file: Express.Multer.File): string | undefined {
+    if (file.mimetype && file.mimetype !== "application/octet-stream") {
+      return file.mimetype;
+    }
+    const detectedType = mimeTypes.lookup(file.originalname);
+    return typeof detectedType === "string" ? detectedType : undefined;
+  }
+
+  private isSupportedMimeType(mimeType: string): boolean {
+    if (SUPPORTED_IMAGE_TYPES.has(mimeType)) {
+      return true;
+    }
+    if (mimeType.startsWith("text/")) {
+      return true;
+    }
+    return SUPPORTED_APPLICATION_TYPES.has(mimeType);
   }
 }

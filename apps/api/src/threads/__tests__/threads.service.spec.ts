@@ -380,6 +380,16 @@ describe("ThreadsService.advanceThread initialization", () => {
             }),
           },
         },
+        {
+          provide: "StorageService",
+          useValue: {
+            upload: jest.fn().mockResolvedValue("storage://test/path"),
+            get: jest.fn().mockResolvedValue(Buffer.from("test")),
+            getSignedUrl: jest
+              .fn()
+              .mockResolvedValue("https://signed.url/test"),
+          },
+        },
       ],
     }).compile();
 

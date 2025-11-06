@@ -15,6 +15,12 @@ describe("ExtractorController", () => {
             extractComponentDefinitions: jest.fn(),
           },
         },
+        {
+          provide: "StorageService",
+          useValue: {
+            upload: jest.fn().mockResolvedValue("storage://test/path"),
+          },
+        },
       ],
     }).compile();
 
@@ -22,6 +28,10 @@ describe("ExtractorController", () => {
   });
 
   describe("extractPdfText", () => {
+    const mockRequest = {
+      headers: {},
+    } as any;
+
     it("should throw BadRequestException when file is too large", async () => {
       const largeFile = {
         buffer: Buffer.from("test"),
@@ -30,9 +40,9 @@ describe("ExtractorController", () => {
         originalname: "test.pdf",
       } as Express.Multer.File;
 
-      await expect(controller.extractPdfText(largeFile)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.extractPdfText(mockRequest, largeFile),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it("should throw BadRequestException for non-PDF files", async () => {
@@ -43,9 +53,9 @@ describe("ExtractorController", () => {
         originalname: "test.png",
       } as Express.Multer.File;
 
-      await expect(controller.extractPdfText(nonPdfFile)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        controller.extractPdfText(mockRequest, nonPdfFile),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it("should accept valid PDF file size and type", () => {
@@ -58,7 +68,7 @@ describe("ExtractorController", () => {
 
       // Validation should not throw
       expect(() => {
-        (controller as any).validatePdfFile(validFile);
+        (controller as any).validateFile(validFile);
       }).not.toThrow();
     });
   });

@@ -107,6 +107,16 @@ export async function processThreadMessage(
   tamboBackend: ITamboBackend,
   allTools: ToolRegistry,
 ): Promise<LegacyComponentDecision> {
+  console.log(
+    "[THREAD-STATE] processThreadMessage called with",
+    messages.length,
+    "messages",
+  );
+  console.log(
+    "[THREAD-STATE] Latest message content:",
+    JSON.stringify(messages[messages.length - 1]?.content),
+  );
+
   const latestMessage = messages[messages.length - 1];
   // For tool responses, we can fully hydrate the component
   if (latestMessage.role === MessageRole.Tool) {
@@ -135,6 +145,9 @@ export async function processThreadMessage(
     advanceRequestDto.availableComponents ?? [],
   );
 
+  console.log(
+    "[THREAD-STATE] About to call tamboBackend.runDecisionLoop with messages",
+  );
   const decisionStream = await tamboBackend.runDecisionLoop({
     messages,
     strictTools,

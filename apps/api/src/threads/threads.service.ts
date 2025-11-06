@@ -113,12 +113,35 @@ export class ThreadsService {
   private async processMessagesForLlm(
     messages: ThreadMessage[],
   ): Promise<ThreadMessage[]> {
-    return await Promise.all(
-      messages.map(async (msg) => ({
-        ...msg,
-        content: await processStorageUrls(msg.content, this.storageService),
-      })),
+    console.log(
+      "[THREADS-SERVICE] processMessagesForLlm called with",
+      messages.length,
+      "messages",
     );
+    const processed = await Promise.all(
+      messages.map(async (msg, index) => {
+        console.log(
+          `[THREADS-SERVICE] Processing message ${index}, role: ${msg.role}, content parts:`,
+          msg.content.length,
+        );
+        const processedContent = await processStorageUrls(
+          msg.content,
+          this.storageService,
+        );
+        console.log(
+          `[THREADS-SERVICE] Message ${index} processed, result content parts:`,
+          processedContent.length,
+        );
+        return {
+          ...msg,
+          content: processedContent,
+        };
+      }),
+    );
+    console.log(
+      "[THREADS-SERVICE] processMessagesForLlm finished processing all messages",
+    );
+    return processed;
   }
 
   /**
@@ -1512,6 +1535,16 @@ export class ThreadsService {
           },
         });
 
+        console.log(
+          "[THREADS-SERVICE] generateStreamingResponse - Calling runDecisionLoop (tool response) with",
+          messages.length,
+          "messages",
+        );
+        console.log(
+          "[THREADS-SERVICE] Latest message content:",
+          JSON.stringify(messages[messages.length - 1]?.content),
+        );
+
         const messageStream = await tamboBackend.runDecisionLoop({
           messages,
           strictTools,
@@ -1581,6 +1614,16 @@ export class ThreadsService {
           forceToolChoice: !!advanceRequestDto.forceToolChoice,
         },
       });
+
+      console.log(
+        "[THREADS-SERVICE] generateStreamingResponse - Calling runDecisionLoop (non-tool) with",
+        messages.length,
+        "messages",
+      );
+      console.log(
+        "[THREADS-SERVICE] Latest message content:",
+        JSON.stringify(messages[messages.length - 1]?.content),
+      );
 
       const streamedResponseMessages = await tamboBackend.runDecisionLoop({
         messages,
@@ -2109,6 +2152,15 @@ export class ThreadsService {
         }
         return fallbackKey;
       }
+      if (providerName === "anthropic") {
+        const fallbackKey = process.env.FALLBACK_ANTHROPIC_API_KEY;
+        if (!fallbackKey) {
+          throw new NotFoundException(
+            "No provider keys found for project and no fallback key configured",
+          );
+        }
+        return fallbackKey;
+      }
       this.logger.error(
         `No provider keys configured for project ${projectId}. An API key is required to proceed.`,
       );
@@ -2133,6 +2185,16 @@ export class ThreadsService {
         if (!fallbackKey) {
           throw new NotFoundException(
             `No OpenAI key found for project ${projectId} and no fallback key configured`,
+          );
+        }
+        return fallbackKey;
+      }
+      // Check for fallback key if Anthropic is requested
+      if (providerName === "anthropic") {
+        const fallbackKey = process.env.FALLBACK_ANTHROPIC_API_KEY;
+        if (!fallbackKey) {
+          throw new NotFoundException(
+            `No Anthropic key found for project ${projectId} and no fallback key configured`,
           );
         }
         return fallbackKey;

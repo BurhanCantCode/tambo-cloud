@@ -39,18 +39,38 @@ export class StorageService {
     const timestamp = Date.now();
     const path = `${projectId}/${timestamp}-${fileName}`;
 
-    const { error } = await this.client.storage
-      .from(this.bucketName)
-      .upload(path, buffer, {
-        contentType: mimeType,
-        upsert: false,
+    try {
+      const { error } = await this.client.storage
+        .from(this.bucketName)
+        .upload(path, buffer, {
+          contentType: mimeType,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error("[STORAGE-SERVICE] Upload error details:", {
+          error,
+          errorMessage: error.message,
+          errorName: error.name,
+          path,
+          fileName,
+          bufferSize: buffer.length,
+        });
+        throw new Error(`Failed to upload file: ${error.message}`);
+      }
+
+      return path;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[STORAGE-SERVICE] Unexpected upload error:", {
+        error,
+        message,
+        path,
+        fileName,
+        bufferSize: buffer.length,
       });
-
-    if (error) {
-      throw new Error(`Failed to upload file: ${error.message}`);
+      throw new Error(`Failed to upload file: ${message}`);
     }
-
-    return path;
   }
 
   /**
@@ -91,14 +111,23 @@ export class StorageService {
    * @returns Promise resolving to signed URL
    */
   async getSignedUrl(path: string): Promise<string> {
+    console.log("[STORAGE-SERVICE] getSignedUrl called with path:", path);
     const { data, error } = await this.client.storage
       .from(this.bucketName)
       .createSignedUrl(path, 3600);
 
     if (error) {
+      console.log(
+        "[STORAGE-SERVICE] Error creating signed URL:",
+        error.message,
+      );
       throw new Error(`Failed to create signed URL: ${error.message}`);
     }
 
+    console.log(
+      "[STORAGE-SERVICE] Signed URL created successfully:",
+      data.signedUrl,
+    );
     return data.signedUrl;
   }
 }

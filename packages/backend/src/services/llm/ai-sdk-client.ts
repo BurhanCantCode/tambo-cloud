@@ -35,6 +35,7 @@ import {
   type ToolSet,
 } from "ai";
 import type OpenAI from "openai";
+import mimeTypes from "mime-types";
 import { UnreachableCaseError } from "ts-essentials";
 import { z } from "zod";
 import { createLangfuseTelemetryConfig } from "../../config/langfuse.config";
@@ -730,23 +731,72 @@ function convertOpenAIMessageToCoreMessage(
         content: message.content,
       } satisfies UserModelMessage;
     } else if (Array.isArray(message.content)) {
-      const processedContent = message.content
-        .map((part) => {
-          if (part.type === "text") {
-            return {
-              type: "text" as const,
-              text: part.text,
-            };
-          } else if (part.type === "image_url" && part.image_url.url) {
-            // Convert image_url to AI SDK's expected image format
-            return {
-              type: "image" as const,
-              image: part.image_url.url,
-            };
+      const processedContent = message.content.reduce<
+        Array<
+          | { type: "text"; text: string }
+          | { type: "image"; image: string }
+          | {
+              type: "file";
+              data: Buffer;
+              filename?: string;
+              mediaType: string;
+            }
+        >
+      >((acc, part) => {
+        if (part.type === "text") {
+          acc.push({
+            type: "text",
+            text: part.text,
+          });
+          return acc;
+        }
+
+        if (part.type === "image_url" && part.image_url.url) {
+          acc.push({
+            type: "image",
+            image: part.image_url.url,
+          });
+          return acc;
+        }
+
+        if (part.type === "file") {
+          const fileData = part.file.file_data;
+          if (!fileData) {
+            console.warn(
+              "Skipping file content without file_data. Filename:",
+              part.file.filename,
+            );
+            return acc;
           }
-          return null;
-        })
-        .filter((part) => part !== null);
+          const filename = part.file.filename;
+          const tamboMimeType = (part as { tamboMimeType?: string })
+            .tamboMimeType;
+          const detectedMime = filename ? mimeTypes.lookup(filename) : false;
+          const lookupMime =
+            typeof detectedMime === "string" ? detectedMime : undefined;
+          const resolvedMimeType =
+            tamboMimeType ?? lookupMime ?? "application/octet-stream";
+
+          try {
+            const buffer = Buffer.from(fileData, "base64");
+            acc.push({
+              type: "file",
+              data: buffer,
+              filename,
+              mediaType: resolvedMimeType,
+            });
+          } catch (error) {
+            console.error(
+              "Failed to decode base64 file data for filename:",
+              filename,
+              error,
+            );
+          }
+          return acc;
+        }
+
+        return acc;
+      }, []);
 
       return {
         role: message.role,

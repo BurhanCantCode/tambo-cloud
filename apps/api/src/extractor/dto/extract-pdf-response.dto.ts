@@ -6,4 +6,11 @@ export class ExtractPdfResponseDto {
     type: "string",
   })
   storagePath!: string;
+
+  @ApiProperty({
+    description: "Normalized MIME type stored with the file",
+    type: "string",
+    example: "application/pdf",
+  })
+  mimeType!: string;
 }
